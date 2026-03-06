@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Sinhala SRT Naturalizer</title>
+    <style>
+        :root { --accent: #00d2ff; --bg: #0f172a; --card: #1e293b; }
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: var(--bg); color: #f1f2f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .container { background: var(--card); padding: 30px; border-radius: 20px; width: 100%; max-width: 550px; box-shadow: 0 15px 50px rgba(0,0,0,0.5); border: 1px solid #334155; }
+        h2 { color: var(--accent); text-align: center; margin-bottom: 5px; }
+        p.sub { text-align: center; font-size: 12px; color: #94a3b8; margin-bottom: 25px; }
+        
+        input, button { width: 100%; padding: 14px; margin: 8px 0; border-radius: 10px; border: none; box-sizing: border-box; }
+        input { background: #0f172a; color: white; border: 1px solid #334155; outline: none; }
+        input:focus { border-color: var(--accent); }
+        
+        .api-section { background: #16213e; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px dashed #4dabf7; }
+        button { background: var(--accent); color: #000; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.3s; }
+        button:hover { opacity: 0.9; transform: translateY(-2px); }
+        button:disabled { background: #475569; cursor: not-allowed; transform: none; }
+
+        .progress-container { display: none; margin-top: 20px; }
+        .bar-bg { background: #334155; height: 12px; border-radius: 6px; overflow: hidden; }
+        .bar-fill { background: var(--accent); height: 100%; width: 0%; transition: 0.4s; }
+        .stats { display: flex; justify-content: space-between; font-size: 13px; margin-top: 8px; color: #94a3b8; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>SRT Naturalizer Pro 🎬</h2>
+    <p class="sub">100% ස්වාභාවික සිංහල කටවහරට එක ක්ලික් එකෙන්.</p>
+
+    <div class="api-section">
+        <label style="font-size: 11px; color: #4dabf7;">Groq API Key (අවශ්‍ය නම් පමණක් AI උදව් ලබා ගැනීමට):</label>
+        <input type="password" id="apiKey" placeholder="ඔබේ Groq API Key එක මෙතනට...">
+    </div>
+
+    <input type="file" id="fileInput" accept=".srt">
+    <button id="processBtn">පරිවර්තනය අරඹන්න</button>
+
+    <div class="progress-container" id="progBox">
+        <div class="bar-bg"><div class="bar-fill" id="pfill"></div></div>
+        <div class="stats">
+            <span id="pcent">0%</span>
+            <span id="timer">ඉතිරි කාලය: සකසමින්...</span>
+        </div>
+        <div id="statusLine" style="font-size: 11px; margin-top: 5px; text-align: center; color: #cbd5e1;"></div>
+    </div>
+</div>
+
+<script>
+    // දැවැන්ත වචන ලැයිස්තුව (Comprehensive Ruleset)
+    const ruleSet = [
+        // සර්වනාම (බහුවචන ඇතුළුව)
+        { f: /ඔහුගේ/g, r: "උගේ" }, { f: /ඇයගේ/g, r: "ඒකිගේ" }, { f: /ඔවුන්ගේ/g, r: "උන්ගේ" },
+        { f: /ඔබගේ/g, r: "ඔයාගේ" }, { f: /ඔහුට/g, r: "ඌට" }, { f: /ඇයට/g, r: "ඒකිට" },
+        { f: /ඔවුන්ට/g, r: "උන්ට" }, { f: /ඔහු/g, r: "ඌ" }, { f: /ඇය/g, r: "ඒකි" },
+        { f: /ඔවුන්/g, r: "උන්" }, { f: /මම/g, r: "මං" }, { f: /මාගේ/g, r: "මගේ" },
+        { f: /අප/g, r: "අපි" }, { f: /අපට/g, r: "අපිට" }, { f: /මොහු/g, r: "මෙයා" },
+        { f: /මේවා/g, r: "මේවා" }, { f: /ඒවා/g, r: "ඒවා" }, { f: /මොවුන්/g, r: "මෙයාලා" },
+
+        // නිපාත සහ උපසර්ග
+        { f: /සඳහා/g, r: "එකට" }, { f: /පිළිබඳ/g, r: "ගැන" }, { f: /සමග/g, r: "එක්ක" },
+        { f: /මගින්/g, r: "හරහා" }, { f: /වෙත/g, r: "ළඟට" }, { f: /තුළ/g, r: "ඇතුළේ" },
+        { f: /සිට/g, r: "ඉඳන්" }, { f: /පමණි/g, r: "විතරයි" }, { f: /නැත/g, r: "නෑ" },
+        { f: /නොවේ/g, r: "නෙවෙයි" }, { f: /කුමක්ද/g, r: "මොකක්ද" }, { f: /කෙසේද/g, r: "කොහොමද" },
+
+        // වාක්‍ය අවසාන සහ ක්‍රියාපද
+        { f: /වේ|වෙයි|වන්නේය/g, r: "වෙනවා" }, { f: /තිබේ/g, r: "තියෙනවා" },
+        { f: /කරයි|කරනු ලබයි/g, r: "කරනවා" }, { f: /පවසන්න/g, r: "කියන්න" },
+        { f: /කරුණාකර/g, r: "පොඩ්ඩක්" }, { f: /ගොස්/g, r: "ගිහින්" }
+    ];
+
+    const processBtn = document.getElementById('processBtn');
+    let startTime;
+
+    processBtn.onclick = async () => {
+        const file = document.getElementById('fileInput').files[0];
+        const apiKey = document.getElementById('apiKey').value.trim();
+        if (!file) return alert("SRT ගොනුවක් තෝරන්න!");
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const blocks = parseSRT(e.target.result);
+            document.getElementById('progBox').style.display = 'block';
+            processBtn.disabled = true;
+            startTime = Date.now();
+
+            let finalOutput = "";
+            const batchSize = 5; // ඉල්ලූ පරිදි පේළි 5 බැගින්
+
+            for (let i = 0; i < blocks.length; i += batchSize) {
+                const batch = blocks.slice(i, i + batchSize);
+                let processedBatch = "";
+
+                if (apiKey) {
+                    // AI ක්‍රමය (Groq)
+                    const batchText = batch.map(b => `${b.id}\n${b.time}\n${b.text}`).join('\n\n');
+                    processedBatch = await callGroqAI(batchText, apiKey);
+                } else {
+                    // Offline ක්‍රමය
+                    processedBatch = batch.map(b => {
+                        let t = b.text;
+                        ruleSet.forEach(rule => t = t.replace(rule.f, rule.r));
+                        // Smart Suffix Fixing (ක්‍රියාපද අවසාන)
+                        t = t.replace(/([ක-ෆ])ේය/g, "$1ා");
+                        t = t.replace(/([ක-ෆ])ුණි/g, "$1ුණා");
+                        t = t.replace(/([ක-ෆ])ියහ/g, "$1ා");
+                        return `${b.id}\n${b.time}\n${t}`;
+                    }).join('\n\n');
+                }
+
+                finalOutput += processedBatch + "\n\n";
+                updateProgress(i + batch.length, blocks.length);
+            }
+
+            download(finalOutput.trim(), "Natural_" + file.name);
+            processBtn.disabled = false;
+        };
+        reader.readAsText(file);
+    };
+
+    function parseSRT(data) {
+        return data.trim().split(/\n\s*\n/).map(block => {
+            const lines = block.split('\n');
+            return { id: lines[0], time: lines[1], text: lines.slice(2).join('\n') };
+        });
+    }
+
+    async function callGroqAI(text, key) {
+        try {
+            const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: "llama-3.3-70b-versatile",
+                    messages: [{ role: "system", content: "You are a Sinhala translator. Convert formal Sinhala to raw spoken movie-style Sinhala. Keep SRT IDs and Timestamps EXACTLY same. Change words like ඔහුගේ to උගේ, ඔබ to ඔයා etc. Return ONLY fixed SRT." },
+                               { role: "user", content: text }],
+                    temperature: 0.2
+                })
+            });
+            const json = await res.json();
+            return json.choices[0].message.content.trim();
+        } catch (e) { return text; }
+    }
+
+    function updateProgress(current, total) {
+        const p = Math.round((current / total) * 100);
+        document.getElementById('pfill').style.width = p + "%";
+        document.getElementById('pcent').innerText = p + "%";
+        
+        const elapsed = (Date.now() - startTime) / 1000;
+        const estimatedTotal = (elapsed / current) * total;
+        const remaining = Math.round(estimatedTotal - elapsed);
+        document.getElementById('timer').innerText = `ඉතිරි කාලය: ${remaining}s`;
+        document.getElementById('statusLine').innerText = `පේළි ${current} / ${total} සකසා ඇත...`;
+    }
+
+    function download(content, name) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([content], {type: 'text/srt'}));
+        a.download = name;
+        a.click();
+    }
+</script>
+</body>
+</html>
